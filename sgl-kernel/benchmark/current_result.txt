@@ -1,0 +1,43 @@
+(venv) mokkapot@mokkapot-sys:~/Projects/sglang/sgl-kernel$ python benchmark/bench_fp8_blockwise_group_gemm_sm120.py 
+
+Benchmark: expected_m_per_group=128, n=512, k=7168, num_groups=256
+cutlass: 3033.3120346069336 us
+
+Benchmark: expected_m_per_group=256, n=512, k=7168, num_groups=256
+cutlass: 4974.460983276367 us
+
+Benchmark: expected_m_per_group=256, n=256, k=7168, num_groups=256
+cutlass: 2550.419235229492 us
+
+Benchmark: expected_m_per_group=512, n=256, k=7168, num_groups=256
+cutlass: 4776.131057739258 us
+
+Benchmark: expected_m_per_group=1, n=512, k=7168, num_groups=256
+cutlass: 2752.1215438842773 us
+
+Benchmark: expected_m_per_group=2, n=256, k=7168, num_groups=256
+cutlass: 1339.1039848327637 us
+
+Benchmark: expected_m_per_group=256, n=4096, k=7168, num_groups=32
+cutlass: 4731.744003295898 us
+
+Benchmark: expected_m_per_group=512, n=4096, k=7168, num_groups=16
+cutlass: 4751.430511474609 us
+
+Benchmark: expected_m_per_group=4, n=4096, k=7168, num_groups=32
+cutlass: 2538.1887435913086 us
+
+Benchmark: expected_m_per_group=8, n=4096, k=7168, num_groups=16
+cutlass: 1412.012767791748 us
+
+Benchmark: expected_m_per_group=1024, n=768, k=4096, num_groups=128
+cutlass: 8235.948944091797 us
+
+Benchmark: expected_m_per_group=1024, n=4096, k=384, num_groups=128
+cutlass: 5011.360168457031 us
+
+Benchmark: expected_m_per_group=16, n=768, k=4096, num_groups=128
+cutlass: 1076.7168045043945 us
+
+Benchmark: expected_m_per_group=16, n=4096, k=384, num_groups=128
+cutlass: 733.5584163665771 us
