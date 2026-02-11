@@ -2,26 +2,24 @@ import argparse
 import os
 import threading
 import time
+from dataclasses import dataclass
+from typing import List, Tuple, Dict, Optional
+
+import torch
+from sgl_kernel import fp8_blockwise_scaled_grouped_mm
+from sgl_kernel import cutlass_fp4_group_mm, scaled_fp4_quant
 
 # CI environment detection
 IS_CI = (
     os.getenv("CI", "false").lower() == "true"
     or os.getenv("GITHUB_ACTIONS", "false").lower() == "true"
 )
-from dataclasses import dataclass
-from typing import List, Tuple, Dict
-
-import torch
-from sgl_kernel import fp8_blockwise_scaled_grouped_mm  # fp8 group scaled matmul
-from sgl_kernel import cutlass_fp4_group_mm, scaled_fp4_quant  # fp4 group scaled matmul
 
 FLOAT4_E2M1_MAX = 6.0
 FLOAT8_E4M3_MAX = torch.finfo(torch.float8_e4m3fn).max
 
-# try to import pynvml for power measurement
 try:
     import pynvml
-
     pynvml.nvmlInit()
     NVML_HANDLE = pynvml.nvmlDeviceGetHandleByIndex(0)
     HAS_NVML = True
@@ -30,9 +28,8 @@ except Exception:
     print("WARNING: pynvml not available. Energy metrics will be skipped.")
     print("Install with: pip install nvidia-ml-py\n")
 
-# Consistent alignment across all kernels for fair comparison
-M_ALIGNMENT = 128
-NK_ALIGNMENT = 128
+M_ALIGNMENT = 16
+NK_ALIGNMENT = 16
 
 
 def ceil_div(x: int, y: int) -> int:
@@ -58,9 +55,7 @@ def per_block_cast_to_fp8(x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
     assert x.dim() == 2
     m, n = x.shape
     x_padded = torch.zeros(
-        (ceil_div(m, 128) * 128, ceil_div(n, 128) * 128),
-        dtype=x.dtype,
-        device=x.device,
+        (ceil_div(m, 128) * 128, ceil_div(n, 128) * 128), dtype=x.dtype, device=x.device
     )
     x_padded[:m, :n] = x
     x_view = x_padded.view(-1, 128, x_padded.size(1) // 128, 128)
@@ -72,12 +67,6 @@ def per_block_cast_to_fp8(x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
 
 
 class PowerSampler:
-    """Sample GPU power draw via NVML.
-
-    Note: nvmlDeviceGetPowerUsage updates roughly every 500ms, so we poll
-    at a matching interval to avoid redundant reads of stale values.
-    """
-
     def __init__(self, interval_ms: float = 500.0):
         self.interval_s = interval_ms / 1000.0
         self.samples = []
@@ -111,28 +100,52 @@ class PowerSampler:
             time.sleep(self.interval_s)
 
 
-def compute_bf16_reference(
-    n: int,
-    k: int,
-    num_groups: int,
-    a_bf16: torch.Tensor,
-    b_bf16: torch.Tensor,
-    expert_offsets: torch.Tensor,
-) -> torch.Tensor:
-    """Compute BF16 grouped GEMM as reference for accuracy comparison."""
-    total_m = expert_offsets[-1].item()
-    ref_out = torch.empty((total_m, n), device="cuda", dtype=torch.bfloat16)
+@dataclass
+class BenchmarkData:
+    """Holds shared input data and reference output for fairness."""
+    a_bf16: torch.Tensor  # [total_m, k_aligned]
+    b_bf16: torch.Tensor  # [num_groups, n_aligned, k_aligned]
+    expert_offsets: torch.Tensor  # [num_groups + 1]
+    ref_out: torch.Tensor  # [total_m, n_aligned]
+    m_per_group: int
+    n: int
+    k: int
+    num_groups: int
 
+
+def generate_benchmark_data(m_per_group: int, n: int, k: int, num_groups: int) -> BenchmarkData:
+    device = "cuda"
+    m_g = align_up(m_per_group, M_ALIGNMENT)
+    n_g = align_up(n, NK_ALIGNMENT)
+    k_g = align_up(k, NK_ALIGNMENT)
+
+    expert_offsets = torch.zeros((num_groups + 1), device=device, dtype=torch.int32)
     for g in range(num_groups):
-        start = expert_offsets[g].item()
-        end = expert_offsets[g + 1].item()
-        ref_out[start:end] = a_bf16[start:end] @ b_bf16[g].t()
+        expert_offsets[g + 1] = expert_offsets[g] + m_g
+    total_m = expert_offsets[-1].item()
 
-    return ref_out
+    a_bf16 = torch.randn((total_m, k_g), device=device, dtype=torch.bfloat16)
+    b_bf16 = torch.randn((num_groups, n_g, k_g), device=device, dtype=torch.bfloat16)
+
+    a_reshaped = a_bf16.view(num_groups, m_g, k_g)
+    b_transposed = b_bf16.transpose(1, 2)  # [g, k, n]
+
+    c_reshaped = torch.bmm(a_reshaped, b_transposed)
+    ref_out = c_reshaped.view(total_m, n_g)
+
+    return BenchmarkData(
+        a_bf16=a_bf16,
+        b_bf16=b_bf16,
+        expert_offsets=expert_offsets,
+        ref_out=ref_out,
+        m_per_group=m_per_group,
+        n=n,
+        k=k,
+        num_groups=num_groups
+    )
 
 
 def accuracy_metrics(test: torch.Tensor, ref: torch.Tensor) -> Dict[str, float]:
-    """Compute multiple accuracy metrics between test output and BF16 reference."""
     t = test.float().flatten()
     r = ref.float().flatten()
     cos_sim = torch.nn.functional.cosine_similarity(
@@ -140,7 +153,6 @@ def accuracy_metrics(test: torch.Tensor, ref: torch.Tensor) -> Dict[str, float]:
     ).item()
     abs_err = (t - r).abs()
     max_abs_err = abs_err.max().item()
-    # Relative RMSE: RMSE / RMS(reference)
     rmse = abs_err.pow(2).mean().sqrt().item()
     ref_rms = r.pow(2).mean().sqrt().item()
     rel_rmse = rmse / ref_rms if ref_rms > 0 else float("inf")
@@ -169,7 +181,7 @@ def run_benchmark_loop(run_fn, num_warmup, num_run):
     torch.cuda.synchronize()
     avg_power_w = power_sampler.stop()
 
-    avg_time_us = start_event.elapsed_time(end_event) / num_run * 1000  # us
+    avg_time_us = start_event.elapsed_time(end_event) / num_run * 1000
     return avg_time_us, avg_power_w
 
 
@@ -177,7 +189,6 @@ def compute_metrics(avg_time_us, avg_power_w, total_m, n, k, acc_metrics):
     avg_time_s = avg_time_us / 1e6
     flops = 2 * total_m * n * k
     tflops = flops / avg_time_us * 1e-6
-
     if avg_power_w > 0:
         energy_mj = avg_power_w * avg_time_s * 1000
         tflops_per_watt = tflops / avg_power_w
@@ -198,229 +209,115 @@ def compute_metrics(avg_time_us, avg_power_w, total_m, n, k, acc_metrics):
     }
 
 
-# ---------------------------------------------------------------------------
-# BF16 Grouped GEMM baseline (torch.bmm — single batched cuBLAS call)
-# ---------------------------------------------------------------------------
-def bench_bf16(
-    expected_m_per_group: int,
-    n: int,
-    k: int,
-    num_groups: int,
-    num_warmup: int,
-    num_run: int,
-) -> Dict:
-    """
-    BF16 grouped GEMM baseline using torch.bmm.
-
-    All experts use the same (padded) M so we can issue a single batched
-    cuBLAS GEMM, which is far more representative of an optimised baseline
-    than looping with torch.mm per expert.
-    """
+def bench_bf16(data: BenchmarkData, num_warmup: int, num_run: int) -> Dict:
     device = "cuda"
-    n_g = align_up(n, NK_ALIGNMENT)
-    k_g = align_up(k, NK_ALIGNMENT)
-    out_dtype = torch.bfloat16
+    m_g = align_up(data.m_per_group, M_ALIGNMENT)
+    n_g = align_up(data.n, NK_ALIGNMENT)
+    k_g = align_up(data.k, NK_ALIGNMENT)
 
-    m_g = align_up(expected_m_per_group, M_ALIGNMENT)
-    total_m = m_g * num_groups
+    a_view = data.a_bf16.view(data.num_groups, m_g, k_g)
+    b_view = data.b_bf16.transpose(1, 2).contiguous()  # [g, n, k] -> [g, k, n]
 
-    # Batched layout: [num_groups, m_g, k_g] and [num_groups, k_g, n_g]
-    a_bf16 = torch.randn((num_groups, m_g, k_g), device=device, dtype=out_dtype)
-    b_bf16 = torch.randn((num_groups, k_g, n_g), device=device, dtype=out_dtype)
-    c_out = torch.empty((num_groups, m_g, n_g), device=device, dtype=out_dtype)
+    c_out = torch.empty((data.num_groups, m_g, n_g), device=device, dtype=torch.bfloat16)
 
     def run_fn():
-        torch.bmm(a_bf16, b_bf16, out=c_out)
+        torch.bmm(a_view, b_view, out=c_out)
 
-    # Accuracy: BF16 vs BF16 = perfect
-    acc = {
-        "cosine_similarity": 1.0,
-        "max_abs_error": 0.0,
-        "relative_rmse": 0.0,
-    }
+    acc = {"cosine_similarity": 1.0, "max_abs_error": 0.0, "relative_rmse": 0.0}
 
     avg_time_us, avg_power_w = run_benchmark_loop(run_fn, num_warmup, num_run)
+    return compute_metrics(avg_time_us, avg_power_w, data.a_bf16.shape[0], n_g, k_g, acc)
 
-    return compute_metrics(avg_time_us, avg_power_w, total_m, n_g, k_g, acc)
 
-
-# ---------------------------------------------------------------------------
-# FP8 Grouped GEMM Benchmark
-# ---------------------------------------------------------------------------
-def bench_fp8(
-    expected_m_per_group: int,
-    n: int,
-    k: int,
-    num_groups: int,
-    num_warmup: int,
-    num_run: int,
-) -> Dict:
-    """
-    FP8 grouped GEMM benchmark.
-
-    IMPORTANT layout note: per_block_cast_to_fp8(b_bf16.t()) produces [k_g, n_g]
-    FP8 data with scales indexed to match that layout. We store the transpose
-    [n_g, k_g] into b_stack, then call b_stack.transpose(1,2) to create a
-    *non-contiguous view* [num_groups, k_g, n_g]. The kernel reads through this
-    strided view, which preserves the correspondence between weight bytes and
-    their scale factors. Making this contiguous would shuffle the bytes without
-    updating scales, producing garbage output.
-    """
+def bench_fp8(data: BenchmarkData, num_warmup: int, num_run: int) -> Dict:
     device = "cuda"
-    # Use same alignment as other benchmarks for fair comparison
-    n_g = align_up(n, NK_ALIGNMENT)
-    k_g = align_up(k, NK_ALIGNMENT)
-    out_dtype = torch.bfloat16
+    m_g = align_up(data.m_per_group, M_ALIGNMENT)
+    n_g = align_up(data.n, NK_ALIGNMENT)
+    k_g = align_up(data.k, NK_ALIGNMENT)
+    total_m = data.a_bf16.shape[0]
 
-    m_g = align_up(expected_m_per_group, M_ALIGNMENT)
+    a_fp8, a_scale = per_token_cast_to_fp8(data.a_bf16)
+    b_tensors_fp8 = []
+    b_scales_fp8 = []
 
-    expert_offsets = torch.zeros((num_groups + 1), device=device, dtype=torch.int32)
-    problem_sizes = torch.zeros((num_groups, 3), device=device, dtype=torch.int32)
-    layout_sfa = torch.zeros((num_groups, 5), device=device, dtype=torch.int32)
-    layout_sfb = torch.zeros((num_groups, 5), device=device, dtype=torch.int32)
+    for g in range(data.num_groups):
+        b_g = data.b_bf16[g]  # [n, k]
+        b_fp8_g, b_scale_g = per_block_cast_to_fp8(b_g.t())  # cast [k, n]
+        b_tensors_fp8.append(b_fp8_g)        # [k, n] in fp8
+        b_scales_fp8.append(b_scale_g)        # scale for [k, n] blocks
 
-    a_tensors = []
-    b_tensors = []
-    a_scales_tensors = []
-    b_scales_tensors = []
-    a_bf16_tensors = []
-    b_bf16_tensors = []
+    b_stack = torch.stack([t.t().contiguous() for t in b_tensors_fp8]) 
+    b_scale_stack = torch.stack(
+        [s.t().contiguous() for s in b_scales_fp8]
+    )  # [g, scale_n, scale_k], contiguous
 
-    for g in range(num_groups):
-        expert_offsets[g + 1] = expert_offsets[g] + m_g
+    # each group has the same [m, n, k]
+    problem_sizes = torch.zeros((data.num_groups, 3), device=device, dtype=torch.int32)
+    for g in range(data.num_groups):
         problem_sizes[g][:] = torch.tensor([m_g, n_g, k_g], device=device)
 
-        a_bf16 = torch.randn((m_g, k_g), device=device)
-        b_bf16 = torch.randn((n_g, k_g), device=device)
+    a_scale_rows = m_g
+    a_scale_cols = ceil_div(k_g, 128)
+    layout_sfa = torch.zeros((data.num_groups, 5), device=device, dtype=torch.int32)
+    for g in range(data.num_groups):
+        layout_sfa[g] = torch.tensor(
+            [g, a_scale_rows, a_scale_cols, a_scale_cols, 1], device=device
+        )
+    b_scale_rows = ceil_div(n_g, 128)
+    b_scale_cols = ceil_div(k_g, 128)
+    layout_sfb = torch.zeros((data.num_groups, 5), device=device, dtype=torch.int32)
+    for g in range(data.num_groups):
+        layout_sfb[g] = torch.tensor(
+            [g, b_scale_rows, b_scale_cols, b_scale_cols, 1], device=device
+        )
 
-        a_bf16_tensors.append(a_bf16.clone())
-        b_bf16_tensors.append(b_bf16.clone())
+    c_out = torch.empty((total_m, n_g), device=device, dtype=torch.bfloat16)
 
-        a_fp8, a_scale = per_token_cast_to_fp8(a_bf16)
-        b_fp8, b_scale = per_block_cast_to_fp8(b_bf16.t())
-        a_tensors.append(a_fp8)
-        b_tensors.append(b_fp8)
-        a_scales_tensors.append(a_scale)
-        b_scales_tensors.append(b_scale)
+    a_ptrs = torch.zeros(data.num_groups, device=device, dtype=torch.int64)
+    b_ptrs = torch.zeros(data.num_groups, device=device, dtype=torch.int64)
+    out_ptrs = torch.zeros(data.num_groups, device=device, dtype=torch.int64)
+    a_scales_ptrs = torch.zeros(data.num_groups, device=device, dtype=torch.int64)
+    b_scales_ptrs = torch.zeros(data.num_groups, device=device, dtype=torch.int64)
 
-    total_m = expert_offsets[-1].item()
+    for g in range(data.num_groups):
+        start_row = data.expert_offsets[g].item()
+        a_ptrs[g] = a_fp8[start_row].data_ptr()
+        b_ptrs[g] = b_stack[g].data_ptr()
+        out_ptrs[g] = c_out[start_row].data_ptr()
+        a_scales_ptrs[g] = a_scale[start_row].data_ptr()
+        b_scales_ptrs[g] = b_scale_stack[g].data_ptr()
 
-    a_stack = torch.empty((total_m, k_g), device=device, dtype=torch.float8_e4m3fn)
-    b_stack = torch.empty((num_groups, n_g, k_g), device=device, dtype=torch.float8_e4m3fn)
-    a_bf16_stack = torch.empty((total_m, k_g), device=device, dtype=torch.bfloat16)
-    b_bf16_stack = torch.empty((num_groups, n_g, k_g), device=device, dtype=torch.bfloat16)
-
-    for g in range(num_groups):
-        start = expert_offsets[g].item()
-        end = expert_offsets[g + 1].item()
-        a_stack[start:end] = a_tensors[g]
-        b_stack[g] = b_tensors[g].t()  # [k_g, n_g] -> [n_g, k_g]
-        a_bf16_stack[start:end] = a_bf16_tensors[g]
-        b_bf16_stack[g] = b_bf16_tensors[g]
-
-    # Non-contiguous transpose view — DO NOT call .contiguous() (see docstring)
-    b_stack = b_stack.transpose(1, 2)
-
-    a_scale_stack = torch.empty((total_m, k_g // 128), device=device, dtype=torch.float32)
-    b_scale_stack = torch.empty((num_groups, n_g // 128, k_g // 128), device=device, dtype=torch.float32)
-
-    for g in range(num_groups):
-        start = expert_offsets[g].item()
-        end = expert_offsets[g + 1].item()
-        a_scale_stack[start:end] = a_scales_tensors[g]
-        b_scale_stack[g] = b_scales_tensors[g].t()
-    # Non-contiguous transpose view — must match b_stack layout
-    b_scale_stack = b_scale_stack.transpose(1, 2)
-
-    c_out = torch.empty((total_m, n_g), device=device, dtype=out_dtype)
-    a_strides = torch.full((num_groups,), a_stack.stride(0), device=device, dtype=torch.int64)
-    c_strides = torch.full((num_groups,), c_out.stride(0), device=device, dtype=torch.int64)
-
-    # Pointer arrays — the kernel may or may not use these depending on the
-    # code path; we populate them correctly regardless.
-    a_ptrs = torch.empty((num_groups,), device=device, dtype=torch.int64)
-    b_ptrs = torch.empty((num_groups,), device=device, dtype=torch.int64)
-    out_ptrs = torch.empty((num_groups,), device=device, dtype=torch.int64)
-    a_scales_ptrs = torch.empty((num_groups,), device=device, dtype=torch.int64)
-    b_scales_ptrs = torch.empty((num_groups,), device=device, dtype=torch.int64)
+    a_strides = torch.full((data.num_groups,), a_fp8.stride(0), device=device, dtype=torch.int64)
+    c_strides = torch.full((data.num_groups,), c_out.stride(0), device=device, dtype=torch.int64)
 
     workspace = torch.empty((128 * 1024 * 1024), device=device, dtype=torch.uint8)
 
     def run_fn():
         fp8_blockwise_scaled_grouped_mm(
             c_out, a_ptrs, b_ptrs, out_ptrs, a_scales_ptrs, b_scales_ptrs,
-            a_stack, b_stack, a_scale_stack, b_scale_stack,
+            a_fp8, b_stack, a_scale, b_scale_stack,
             a_strides, a_strides, c_strides,
             layout_sfa, layout_sfb, problem_sizes,
-            expert_offsets[:-1], workspace,
+            data.expert_offsets[:-1], workspace,
         )
 
-    # Correctness check
     run_fn()
     torch.cuda.synchronize()
-    fp8_output = c_out.clone()
-    ref_output = compute_bf16_reference(
-        n_g, k_g, num_groups, a_bf16_stack, b_bf16_stack, expert_offsets
-    )
-    acc = accuracy_metrics(fp8_output, ref_output)
 
+    acc = accuracy_metrics(c_out, data.ref_out)
     avg_time_us, avg_power_w = run_benchmark_loop(run_fn, num_warmup, num_run)
 
     return compute_metrics(avg_time_us, avg_power_w, total_m, n_g, k_g, acc)
 
 
-# ---------------------------------------------------------------------------
-# FP4 Grouped GEMM Benchmark
-# ---------------------------------------------------------------------------
-def bench_fp4(
-    expected_m_per_group: int,
-    n: int,
-    k: int,
-    num_groups: int,
-    num_warmup: int,
-    num_run: int,
-) -> Dict:
-    """
-    FP4 grouped MoE GEMM benchmark using cutlass_fp4_group_mm.
-
-    FP4 layout:
-    - Weights: [e, n, k//2] as uint8 (two FP4 E2M1 values packed per byte)
-    - Weight block scales: [e, n, k//16] as float8_e4m3fn (block size = 16)
-    - Activations: same FP4 packed format via scaled_fp4_quant
-    - Alphas: [e] as float32 = 1/(a_global_scale * w_global_scale)
-    """
+def bench_fp4(data: BenchmarkData, num_warmup: int, num_run: int) -> Dict:
     device = "cuda"
     out_dtype = torch.bfloat16
-
     fp4_block_size = 16
-    k_aligned = align_up(k, NK_ALIGNMENT)
-    n_aligned = align_up(n, NK_ALIGNMENT)
+    n_g = align_up(data.n, NK_ALIGNMENT)
+    k_g = align_up(data.k, NK_ALIGNMENT)
+    m_g = align_up(data.m_per_group, M_ALIGNMENT)
 
-    m_g = align_up(expected_m_per_group, M_ALIGNMENT)
-
-    group_ms = [m_g for _ in range(num_groups)]
-
-    # Build expert offsets
-    expert_offsets = torch.zeros((num_groups + 1), device=device, dtype=torch.int32)
-    for g in range(num_groups):
-        expert_offsets[g + 1] = expert_offsets[g] + group_ms[g]
-    total_m = expert_offsets[-1].item()
-
-    # Build blockscale offsets
-    blockscale_offsets = torch.zeros((num_groups + 1), device=device, dtype=torch.int32)
-    for g in range(num_groups):
-        blockscale_offsets[g + 1] = blockscale_offsets[g] + group_ms[g]
-
-    # Problem sizes: [e, 3] -> (m_g, n_aligned, k_aligned)
-    problem_sizes = torch.zeros((num_groups, 3), device=device, dtype=torch.int32)
-    for g in range(num_groups):
-        problem_sizes[g][:] = torch.tensor(
-            [group_ms[g], n_aligned, k_aligned], device=device
-        )
-
-    # Generate BF16 data for reference and FP4 quantization
-    a_bf16_list = []
-    b_bf16_list = []
     a_fp4_list = []
     a_blockscale_list = []
     b_fp4_list = []
@@ -428,114 +325,73 @@ def bench_fp4(
     a_global_scales = []
     b_global_scales = []
 
-    for g in range(num_groups):
-        a_bf16 = torch.randn((m_g, k_aligned), device=device, dtype=out_dtype)
-        b_bf16 = torch.randn((n_aligned, k_aligned), device=device, dtype=out_dtype)
+    for g in range(data.num_groups):
+        start = data.expert_offsets[g].item()
+        end = data.expert_offsets[g + 1].item()
 
-        a_bf16_list.append(a_bf16.clone())
-        b_bf16_list.append(b_bf16.clone())
+        a_chunk = data.a_bf16[start:end]
+        b_chunk = data.b_bf16[g]  # [n, k]
 
-        a_gscale = (
-            (FLOAT8_E4M3_MAX * FLOAT4_E2M1_MAX)
-            / a_bf16.flatten().abs().amax().clamp(1e-4)
-        ).to(torch.float32)
-        b_gscale = (
-            (FLOAT8_E4M3_MAX * FLOAT4_E2M1_MAX)
-            / b_bf16.flatten().abs().amax().clamp(1e-4)
-        ).to(torch.float32)
+        a_gscale = ((FLOAT8_E4M3_MAX * FLOAT4_E2M1_MAX) / a_chunk.flatten().abs().amax().clamp(1e-4)).to(torch.float32)
+        b_gscale = ((FLOAT8_E4M3_MAX * FLOAT4_E2M1_MAX) / b_chunk.flatten().abs().amax().clamp(1e-4)).to(torch.float32)
 
         a_global_scales.append(a_gscale)
         b_global_scales.append(b_gscale)
 
-        a_fp4, a_bscale = scaled_fp4_quant(a_bf16, a_gscale)
-        b_fp4, b_bscale = scaled_fp4_quant(b_bf16, b_gscale)
+        a_fp4, a_bscale = scaled_fp4_quant(a_chunk, a_gscale)
+        b_fp4, b_bscale = scaled_fp4_quant(b_chunk, b_gscale)
 
         a_fp4_list.append(a_fp4)
         a_blockscale_list.append(a_bscale)
         b_fp4_list.append(b_fp4)
         b_blockscale_list.append(b_bscale)
 
-    # Stack activations contiguously
-    a_fp4_stack = torch.empty(
-        (total_m, k_aligned // 2), device=device, dtype=torch.uint8
-    )
-    a_blockscale_stack = torch.empty(
-        (total_m, k_aligned // fp4_block_size),
-        device=device,
-        dtype=torch.float8_e4m3fn,
-    )
+    total_m = data.a_bf16.shape[0]
+    a_fp4_stack = torch.empty((total_m, k_g // 2), device=device, dtype=torch.uint8)
+    a_blockscale_stack = torch.empty((total_m, k_g // fp4_block_size), device=device, dtype=torch.float8_e4m3fn)
 
-    # Stack BF16 references
-    a_bf16_stack = torch.empty(
-        (total_m, k_aligned), device=device, dtype=out_dtype
-    )
-    b_bf16_stack = torch.empty(
-        (num_groups, n_aligned, k_aligned), device=device, dtype=out_dtype
-    )
+    b_fp4_stack = torch.stack(b_fp4_list)
+    b_blockscale_stack = torch.stack(b_blockscale_list)
 
-    # Weights per expert
-    b_fp4_stack = torch.empty(
-        (num_groups, n_aligned, k_aligned // 2), device=device, dtype=torch.uint8
-    )
-    b_blockscale_stack = torch.empty(
-        (num_groups, n_aligned, k_aligned // fp4_block_size),
-        device=device,
-        dtype=torch.float8_e4m3fn,
-    )
-
-    for g in range(num_groups):
-        start = expert_offsets[g].item()
-        end = expert_offsets[g + 1].item()
+    for g in range(data.num_groups):
+        start = data.expert_offsets[g].item()
+        end = data.expert_offsets[g + 1].item()
         a_fp4_stack[start:end] = a_fp4_list[g]
         a_blockscale_stack[start:end] = a_blockscale_list[g]
-        b_fp4_stack[g] = b_fp4_list[g]
-        b_blockscale_stack[g] = b_blockscale_list[g]
-        a_bf16_stack[start:end] = a_bf16_list[g]
-        b_bf16_stack[g] = b_bf16_list[g]
 
-    # Per-expert alphas
-    alphas = torch.empty((num_groups,), device=device, dtype=torch.float32)
-    for g in range(num_groups):
-        alphas[g] = 1.0 / (a_global_scales[g] * b_global_scales[g])
+    alphas = torch.tensor([1.0 / (a * b) for a, b in zip(a_global_scales, b_global_scales)], device=device, dtype=torch.float32)
 
-    ab_strides = torch.full(
-        (num_groups,), k_aligned, device=device, dtype=torch.int64
-    )
-    c_strides = torch.full(
-        (num_groups,), n_aligned, device=device, dtype=torch.int64
-    )
+    group_ms = [m_g for _ in range(data.num_groups)]
+    blockscale_offsets = torch.zeros((data.num_groups + 1), device=device, dtype=torch.int32)
+    for g in range(data.num_groups):
+        blockscale_offsets[g + 1] = blockscale_offsets[g] + group_ms[g]
 
-    c_out = torch.empty((total_m, n_aligned), device=device, dtype=out_dtype)
+    problem_sizes = torch.zeros((data.num_groups, 3), device=device, dtype=torch.int32)
+    for g in range(data.num_groups):
+        problem_sizes[g][:] = torch.tensor([group_ms[g], n_g, k_g], device=device)
+
+    ab_strides = torch.full((data.num_groups,), k_g, device=device, dtype=torch.int64)
+    c_strides = torch.full((data.num_groups,), n_g, device=device, dtype=torch.int64)
+
+    params = {
+        "ab_strides": ab_strides,
+        "c_strides": c_strides,
+        "problem_sizes": problem_sizes,
+        "expert_offsets": data.expert_offsets[:-1],
+        "blockscale_offsets": blockscale_offsets[:-1],
+    }
 
     def run_fn():
-        torch.ops.sgl_kernel.cutlass_fp4_group_mm.default(
-            c_out,
-            a_fp4_stack,
-            b_fp4_stack,
-            a_blockscale_stack,
-            b_blockscale_stack,
-            alphas,
-            ab_strides,
-            c_strides,
-            problem_sizes,
-            expert_offsets[:-1],
-            blockscale_offsets[:-1],
+        return cutlass_fp4_group_mm(
+            a_fp4_stack, b_fp4_stack, a_blockscale_stack, b_blockscale_stack,
+            alphas, out_dtype, device, params,
         )
 
-    # Correctness check
-    run_fn()
+    c_out = run_fn()
     torch.cuda.synchronize()
-    fp4_output = c_out.clone()
-
-    ref_output = compute_bf16_reference(
-        n_aligned, k_aligned, num_groups,
-        a_bf16_stack, b_bf16_stack, expert_offsets,
-    )
-    acc = accuracy_metrics(fp4_output, ref_output)
-
+    acc = accuracy_metrics(c_out, data.ref_out)
     avg_time_us, avg_power_w = run_benchmark_loop(run_fn, num_warmup, num_run)
-
-    return compute_metrics(avg_time_us, avg_power_w, total_m, n_aligned, k_aligned, acc)
+    return compute_metrics(avg_time_us, avg_power_w, total_m, n_g, k_g, acc)
 
 
 benchmark_kernels = {
@@ -562,29 +418,22 @@ def benchmark_one_shape(
     results = []
 
     for shape in shape_args:
-        n_g = align_up(shape.n, NK_ALIGNMENT)
-        k_g = align_up(shape.k, NK_ALIGNMENT)
-        m_g = align_up(shape.expected_m_per_group, M_ALIGNMENT)
+        data = generate_benchmark_data(shape.expected_m_per_group, shape.n, shape.k, shape.num_groups)
+
         print(
             f"\n{'='*80}\n"
             f"Benchmark: expected_m_per_group={shape.expected_m_per_group} "
-            f"(aligned={m_g}), "
-            f"n={shape.n} (aligned={n_g}), "
-            f"k={shape.k} (aligned={k_g}), "
+            f"(aligned={align_up(shape.expected_m_per_group, M_ALIGNMENT)}), "
+            f"n={shape.n} (aligned={align_up(shape.n, NK_ALIGNMENT)}), "
+            f"k={shape.k} (aligned={align_up(shape.k, NK_ALIGNMENT)}), "
             f"num_groups={shape.num_groups}\n"
             f"{'='*80}"
         )
+
         for kernel_name in kernels_to_run:
             kernel_func = benchmark_kernels[kernel_name]
             try:
-                metrics = kernel_func(
-                    shape.expected_m_per_group,
-                    shape.n,
-                    shape.k,
-                    shape.num_groups,
-                    num_warmup,
-                    num_run,
-                )
+                metrics = kernel_func(data, num_warmup, num_run)
 
                 print(f"\n  Kernel: {kernel_name}")
                 print(f"  Total M (across groups):  {metrics['total_m']}")
@@ -603,15 +452,9 @@ def benchmark_one_shape(
                     print(f"  ---- Energy ----")
                     print(f"  (pynvml not available, energy metrics skipped)")
                 print(f"  ---- Accuracy (vs BF16 reference) ----")
-                print(
-                    f"  Cosine Similarity:         {metrics['cosine_similarity']:.6f}"
-                )
-                print(
-                    f"  Max Abs Error:             {metrics['max_abs_error']:.6f}"
-                )
-                print(
-                    f"  Relative RMSE:             {metrics['relative_rmse']:.6f}"
-                )
+                print(f"  Cosine Similarity:         {metrics['cosine_similarity']:.6f}")
+                print(f"  Max Abs Error:             {metrics['max_abs_error']:.6f}")
+                print(f"  Relative RMSE:             {metrics['relative_rmse']:.6f}")
 
                 results.append(
                     {
@@ -663,7 +506,7 @@ def main():
         description="Grouped GEMM benchmark: BF16 (bmm) vs FP8 vs FP4"
     )
     parser.add_argument("--num-warmup", type=int, default=500)
-    parser.add_argument("--num-run", type=int, default=2000)
+    parser.add_argument("--num-run", type=int, default=2000) # 5000 for results
     parser.add_argument(
         "--kernels",
         nargs="+",
@@ -707,14 +550,6 @@ def main():
             ShapeArg(expected_m_per_group=16, n=768, k=4096, num_groups=128),
             # Decode, Qwen3-235B-A22B-FP8, down, bs = 256, TP = 4
             ShapeArg(expected_m_per_group=16, n=4096, k=384, num_groups=128),
-            # 1. Decode, TP — extreme bandwidth-bound (tiny M, small N, many experts)
-            # ShapeArg(expected_m_per_group=1, n=512, k=7168, num_groups=256),
-            # 2. Prefill, TP — compute-bound (large M, small N, many experts)
-            # ShapeArg(expected_m_per_group=256, n=512, k=7168, num_groups=256),
-            # 3. Decode, EP — bandwidth-bound but larger expert
-            # ShapeArg(expected_m_per_group=4, n=4096, k=7168, num_groups=32),
-            # 4. Prefill, EP — compute-bound with large expert
-            # ShapeArg(expected_m_per_group=512, n=4096, k=7168, num_groups=16),
         ]
     args = parser.parse_args()
     benchmark_one_shape(shape_args, args.num_warmup, args.num_run, args.kernels)
