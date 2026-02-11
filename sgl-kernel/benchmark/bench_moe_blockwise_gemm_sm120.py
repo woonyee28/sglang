@@ -30,7 +30,7 @@ except Exception:
 
 M_ALIGNMENT = 16
 NK_ALIGNMENT = 16
-
+M_ALIGNMENT_FP4 = 128
 
 def ceil_div(x: int, y: int) -> int:
     return (x + y - 1) // y
@@ -103,10 +103,17 @@ class PowerSampler:
 @dataclass
 class BenchmarkData:
     """Holds shared input data and reference output for fairness."""
-    a_bf16: torch.Tensor  # [total_m, k_aligned]
-    b_bf16: torch.Tensor  # [num_groups, n_aligned, k_aligned]
-    expert_offsets: torch.Tensor  # [num_groups + 1]
-    ref_out: torch.Tensor  # [total_m, n_aligned]
+    # Primary data (M aligned to M_ALIGNMENT=16 for BF16/FP8)
+    a_bf16: torch.Tensor          # [total_m, k_aligned]
+    b_bf16: torch.Tensor          # [num_groups, n_aligned, k_aligned]
+    expert_offsets: torch.Tensor   # [num_groups + 1]
+    ref_out: torch.Tensor          # [total_m, n_aligned]
+
+    # FP4-specific data (M aligned to M_ALIGNMENT_FP4=128)
+    fp4_a_bf16: torch.Tensor       # [fp4_total_m, k_aligned]
+    fp4_expert_offsets: torch.Tensor  # [num_groups + 1]
+    fp4_ref_out: torch.Tensor      # [fp4_total_m, n_aligned]
+
     m_per_group: int
     n: int
     k: int
@@ -115,6 +122,7 @@ class BenchmarkData:
 
 def generate_benchmark_data(m_per_group: int, n: int, k: int, num_groups: int) -> BenchmarkData:
     device = "cuda"
+    # BF16/FP8 alignment
     m_g = align_up(m_per_group, M_ALIGNMENT)
     n_g = align_up(n, NK_ALIGNMENT)
     k_g = align_up(k, NK_ALIGNMENT)
@@ -129,15 +137,38 @@ def generate_benchmark_data(m_per_group: int, n: int, k: int, num_groups: int) -
 
     a_reshaped = a_bf16.view(num_groups, m_g, k_g)
     b_transposed = b_bf16.transpose(1, 2)  # [g, k, n]
-
     c_reshaped = torch.bmm(a_reshaped, b_transposed)
     ref_out = c_reshaped.view(total_m, n_g)
+
+    # FP4 alignment (M padded to 128)
+    fp4_m_g = align_up(m_per_group, M_ALIGNMENT_FP4)
+    fp4_expert_offsets = torch.zeros((num_groups + 1), device=device, dtype=torch.int32)
+    for g in range(num_groups):
+        fp4_expert_offsets[g + 1] = fp4_expert_offsets[g] + fp4_m_g
+    fp4_total_m = fp4_expert_offsets[-1].item()
+
+    # Build FP4 A matrix: copy real data from a_bf16, zero-pad extra rows
+    fp4_a_bf16 = torch.zeros((fp4_total_m, k_g), device=device, dtype=torch.bfloat16)
+    for g in range(num_groups):
+        src_start = expert_offsets[g].item()
+        src_end = expert_offsets[g + 1].item()
+        dst_start = fp4_expert_offsets[g].item()
+        # Copy the actual rows (m_g rows), rest stays zero
+        fp4_a_bf16[dst_start:dst_start + m_g] = a_bf16[src_start:src_end]
+
+    # FP4 reference output
+    fp4_a_reshaped = fp4_a_bf16.view(num_groups, fp4_m_g, k_g)
+    fp4_c_reshaped = torch.bmm(fp4_a_reshaped, b_transposed)
+    fp4_ref_out = fp4_c_reshaped.view(fp4_total_m, n_g)
 
     return BenchmarkData(
         a_bf16=a_bf16,
         b_bf16=b_bf16,
         expert_offsets=expert_offsets,
         ref_out=ref_out,
+        fp4_a_bf16=fp4_a_bf16,
+        fp4_expert_offsets=fp4_expert_offsets,
+        fp4_ref_out=fp4_ref_out,
         m_per_group=m_per_group,
         n=n,
         k=k,
@@ -246,7 +277,7 @@ def bench_fp8(data: BenchmarkData, num_warmup: int, num_run: int) -> Dict:
         b_tensors_fp8.append(b_fp8_g)        # [k, n] in fp8
         b_scales_fp8.append(b_scale_g)        # scale for [k, n] blocks
 
-    b_stack = torch.stack([t.t().contiguous() for t in b_tensors_fp8]) 
+    b_stack = torch.stack([t.t().contiguous() for t in b_tensors_fp8])
     b_scale_stack = torch.stack(
         [s.t().contiguous() for s in b_scales_fp8]
     )  # [g, scale_n, scale_k], contiguous
@@ -316,7 +347,11 @@ def bench_fp4(data: BenchmarkData, num_warmup: int, num_run: int) -> Dict:
     fp4_block_size = 16
     n_g = align_up(data.n, NK_ALIGNMENT)
     k_g = align_up(data.k, NK_ALIGNMENT)
-    m_g = align_up(data.m_per_group, M_ALIGNMENT)
+    m_g = align_up(data.m_per_group, M_ALIGNMENT_FP4)
+
+    # Use FP4-specific data (128-aligned M)
+    fp4_offsets = data.fp4_expert_offsets
+    fp4_total_m = fp4_offsets[-1].item()
 
     a_fp4_list = []
     a_blockscale_list = []
@@ -326,11 +361,11 @@ def bench_fp4(data: BenchmarkData, num_warmup: int, num_run: int) -> Dict:
     b_global_scales = []
 
     for g in range(data.num_groups):
-        start = data.expert_offsets[g].item()
-        end = data.expert_offsets[g + 1].item()
+        start = fp4_offsets[g].item()
+        end = fp4_offsets[g + 1].item()
 
-        a_chunk = data.a_bf16[start:end]
-        b_chunk = data.b_bf16[g]  # [n, k]
+        a_chunk = data.fp4_a_bf16[start:end]  # [fp4_m_g, k] — already 128-aligned
+        b_chunk = data.b_bf16[g]  # [n, k] — shared B weights
 
         a_gscale = ((FLOAT8_E4M3_MAX * FLOAT4_E2M1_MAX) / a_chunk.flatten().abs().amax().clamp(1e-4)).to(torch.float32)
         b_gscale = ((FLOAT8_E4M3_MAX * FLOAT4_E2M1_MAX) / b_chunk.flatten().abs().amax().clamp(1e-4)).to(torch.float32)
@@ -346,16 +381,15 @@ def bench_fp4(data: BenchmarkData, num_warmup: int, num_run: int) -> Dict:
         b_fp4_list.append(b_fp4)
         b_blockscale_list.append(b_bscale)
 
-    total_m = data.a_bf16.shape[0]
-    a_fp4_stack = torch.empty((total_m, k_g // 2), device=device, dtype=torch.uint8)
-    a_blockscale_stack = torch.empty((total_m, k_g // fp4_block_size), device=device, dtype=torch.float8_e4m3fn)
+    a_fp4_stack = torch.empty((fp4_total_m, k_g // 2), device=device, dtype=torch.uint8)
+    a_blockscale_stack = torch.empty((fp4_total_m, k_g // fp4_block_size), device=device, dtype=torch.float8_e4m3fn)
 
     b_fp4_stack = torch.stack(b_fp4_list)
     b_blockscale_stack = torch.stack(b_blockscale_list)
 
     for g in range(data.num_groups):
-        start = data.expert_offsets[g].item()
-        end = data.expert_offsets[g + 1].item()
+        start = fp4_offsets[g].item()
+        end = fp4_offsets[g + 1].item()
         a_fp4_stack[start:end] = a_fp4_list[g]
         a_blockscale_stack[start:end] = a_blockscale_list[g]
 
@@ -377,7 +411,7 @@ def bench_fp4(data: BenchmarkData, num_warmup: int, num_run: int) -> Dict:
         "ab_strides": ab_strides,
         "c_strides": c_strides,
         "problem_sizes": problem_sizes,
-        "expert_offsets": data.expert_offsets[:-1],
+        "expert_offsets": fp4_offsets[:-1],
         "blockscale_offsets": blockscale_offsets[:-1],
     }
 
@@ -389,9 +423,9 @@ def bench_fp4(data: BenchmarkData, num_warmup: int, num_run: int) -> Dict:
 
     c_out = run_fn()
     torch.cuda.synchronize()
-    acc = accuracy_metrics(c_out, data.ref_out)
+    acc = accuracy_metrics(c_out, data.fp4_ref_out)
     avg_time_us, avg_power_w = run_benchmark_loop(run_fn, num_warmup, num_run)
-    return compute_metrics(avg_time_us, avg_power_w, total_m, n_g, k_g, acc)
+    return compute_metrics(avg_time_us, avg_power_w, fp4_total_m, n_g, k_g, acc)
 
 
 benchmark_kernels = {

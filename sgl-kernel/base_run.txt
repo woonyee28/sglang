@@ -1,0 +1,707 @@
+
+================================================================================
+Benchmark: expected_m_per_group=128 (aligned=128), n=512 (aligned=512), k=7168 (aligned=7168), num_groups=256
+================================================================================
+
+  Kernel: bf16_baseline
+  Total M (across groups):  32768
+  Aligned N=512, K=7168
+  ---- Performance ----
+  Latency:                  6034.19 us
+  Throughput:               39.86 TFLOPS
+  ---- Energy ----
+  Avg Power:                180.0 W
+  Energy per call:          1086.016 mJ
+  Energy Efficiency:        0.2215 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         1.000000
+  Max Abs Error:             0.000000
+  Relative RMSE:             0.000000
+
+  Kernel: fp8_grouped
+  Total M (across groups):  32768
+  Aligned N=512, K=7168
+  ---- Performance ----
+  Latency:                  3173.04 us
+  Throughput:               75.80 TFLOPS
+  ---- Energy ----
+  Avg Power:                173.7 W
+  Energy per call:          551.098 mJ
+  Energy Efficiency:        0.4364 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         0.981250
+  Max Abs Error:             105.000000
+  Relative RMSE:             0.198418
+
+  Kernel: fp4_grouped
+  Total M (across groups):  32768
+  Aligned N=512, K=7168
+  ---- Performance ----
+  Latency:                  1742.04 us
+  Throughput:               138.07 TFLOPS
+  ---- Energy ----
+  Avg Power:                159.3 W
+  Energy per call:          277.578 mJ
+  Energy Efficiency:        0.8665 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         0.990971
+  Max Abs Error:             60.500000
+  Relative RMSE:             0.134402
+
+================================================================================
+Benchmark: expected_m_per_group=256 (aligned=256), n=512 (aligned=512), k=7168 (aligned=7168), num_groups=256
+================================================================================
+
+  Kernel: bf16_baseline
+  Total M (across groups):  65536
+  Aligned N=512, K=7168
+  ---- Performance ----
+  Latency:                  10357.86 us
+  Throughput:               46.44 TFLOPS
+  ---- Energy ----
+  Avg Power:                180.0 W
+  Energy per call:          1864.382 mJ
+  Energy Efficiency:        0.2580 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         1.000000
+  Max Abs Error:             0.000000
+  Relative RMSE:             0.000000
+
+  Kernel: fp8_grouped
+  Total M (across groups):  65536
+  Aligned N=512, K=7168
+  ---- Performance ----
+  Latency:                  5095.88 us
+  Throughput:               94.40 TFLOPS
+  ---- Energy ----
+  Avg Power:                180.0 W
+  Energy per call:          917.209 mJ
+  Energy Efficiency:        0.5245 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         0.981228
+  Max Abs Error:             113.968750
+  Relative RMSE:             0.198544
+
+  Kernel: fp4_grouped
+  Total M (across groups):  65536
+  Aligned N=512, K=7168
+  ---- Performance ----
+  Latency:                  2186.72 us
+  Throughput:               219.98 TFLOPS
+  ---- Energy ----
+  Avg Power:                175.5 W
+  Energy per call:          383.660 mJ
+  Energy Efficiency:        1.2538 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         0.990975
+  Max Abs Error:             63.500000
+  Relative RMSE:             0.134384
+
+================================================================================
+Benchmark: expected_m_per_group=256 (aligned=256), n=256 (aligned=256), k=7168 (aligned=7168), num_groups=256
+================================================================================
+
+  Kernel: bf16_baseline
+  Total M (across groups):  65536
+  Aligned N=256, K=7168
+  ---- Performance ----
+  Latency:                  5274.44 us
+  Throughput:               45.60 TFLOPS
+  ---- Energy ----
+  Avg Power:                180.0 W
+  Energy per call:          949.375 mJ
+  Energy Efficiency:        0.2533 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         1.000000
+  Max Abs Error:             0.000000
+  Relative RMSE:             0.000000
+
+  Kernel: fp8_grouped
+  Total M (across groups):  65536
+  Aligned N=256, K=7168
+  ---- Performance ----
+  Latency:                  2737.09 us
+  Throughput:               87.87 TFLOPS
+  ---- Energy ----
+  Avg Power:                180.3 W
+  Energy per call:          493.423 mJ
+  Energy Efficiency:        0.4874 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         0.981244
+  Max Abs Error:             102.000000
+  Relative RMSE:             0.198460
+
+  Kernel: fp4_grouped
+  Total M (across groups):  65536
+  Aligned N=256, K=7168
+  ---- Performance ----
+  Latency:                  1423.69 us
+  Throughput:               168.94 TFLOPS
+  ---- Energy ----
+  Avg Power:                178.5 W
+  Energy per call:          254.167 mJ
+  Energy Efficiency:        0.9463 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         0.990982
+  Max Abs Error:             61.500000
+  Relative RMSE:             0.134325
+
+================================================================================
+Benchmark: expected_m_per_group=512 (aligned=512), n=256 (aligned=256), k=7168 (aligned=7168), num_groups=256
+================================================================================
+
+  Kernel: bf16_baseline
+  Total M (across groups):  131072
+  Aligned N=256, K=7168
+  ---- Performance ----
+  Latency:                  10336.04 us
+  Throughput:               46.54 TFLOPS
+  ---- Energy ----
+  Avg Power:                180.0 W
+  Energy per call:          1860.438 mJ
+  Energy Efficiency:        0.2586 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         1.000000
+  Max Abs Error:             0.000000
+  Relative RMSE:             0.000000
+
+  Kernel: fp8_grouped
+  Total M (across groups):  131072
+  Aligned N=256, K=7168
+  ---- Performance ----
+  Latency:                  5138.97 us
+  Throughput:               93.61 TFLOPS
+  ---- Energy ----
+  Avg Power:                180.0 W
+  Energy per call:          924.994 mJ
+  Energy Efficiency:        0.5200 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         0.981236
+  Max Abs Error:             108.000000
+  Relative RMSE:             0.198497
+
+  Kernel: fp4_grouped
+  Total M (across groups):  131072
+  Aligned N=256, K=7168
+  ---- Performance ----
+  Latency:                  2184.59 us
+  Throughput:               220.20 TFLOPS
+  ---- Energy ----
+  Avg Power:                176.8 W
+  Energy per call:          386.301 mJ
+  Energy Efficiency:        1.2452 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         0.990972
+  Max Abs Error:             69.859375
+  Relative RMSE:             0.134405
+
+================================================================================
+Benchmark: expected_m_per_group=1 (aligned=16), n=512 (aligned=512), k=7168 (aligned=7168), num_groups=256
+================================================================================
+
+  Kernel: bf16_baseline
+  Total M (across groups):  4096
+  Aligned N=512, K=7168
+  ---- Performance ----
+  Latency:                  4767.20 us
+  Throughput:               6.31 TFLOPS
+  ---- Energy ----
+  Avg Power:                140.1 W
+  Energy per call:          668.025 mJ
+  Energy Efficiency:        0.0450 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         1.000000
+  Max Abs Error:             0.000000
+  Relative RMSE:             0.000000
+
+  Kernel: fp8_grouped
+  Total M (across groups):  4096
+  Aligned N=512, K=7168
+  ---- Performance ----
+  Latency:                  2657.36 us
+  Throughput:               11.31 TFLOPS
+  ---- Energy ----
+  Avg Power:                170.0 W
+  Energy per call:          451.721 mJ
+  Energy Efficiency:        0.0666 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         0.981347
+  Max Abs Error:             108.500000
+  Relative RMSE:             0.197807
+
+  Kernel: fp4_grouped
+  Total M (across groups):  32768
+  Aligned N=512, K=7168
+  ---- Performance ----
+  Latency:                  1749.08 us
+  Throughput:               137.51 TFLOPS
+  ---- Energy ----
+  Avg Power:                141.5 W
+  Energy per call:          247.510 mJ
+  Energy Efficiency:        0.9718 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         0.990976
+  Max Abs Error:             59.875000
+  Relative RMSE:             0.134352
+
+================================================================================
+Benchmark: expected_m_per_group=2 (aligned=16), n=256 (aligned=256), k=7168 (aligned=7168), num_groups=256
+================================================================================
+
+  Kernel: bf16_baseline
+  Total M (across groups):  4096
+  Aligned N=256, K=7168
+  ---- Performance ----
+  Latency:                  2476.11 us
+  Throughput:               6.07 TFLOPS
+  ---- Energy ----
+  Avg Power:                135.2 W
+  Energy per call:          334.864 mJ
+  Energy Efficiency:        0.0449 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         1.000000
+  Max Abs Error:             0.000000
+  Relative RMSE:             0.000000
+
+  Kernel: fp8_grouped
+  Total M (across groups):  4096
+  Aligned N=256, K=7168
+  ---- Performance ----
+  Latency:                  1408.92 us
+  Throughput:               10.67 TFLOPS
+  ---- Energy ----
+  Avg Power:                156.1 W
+  Energy per call:          219.911 mJ
+  Energy Efficiency:        0.0684 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         0.981574
+  Max Abs Error:             95.000000
+  Relative RMSE:             0.196607
+
+  Kernel: fp4_grouped
+  Total M (across groups):  32768
+  Aligned N=256, K=7168
+  ---- Performance ----
+  Latency:                  1040.60 us
+  Throughput:               115.57 TFLOPS
+  ---- Energy ----
+  Avg Power:                131.1 W
+  Energy per call:          136.398 mJ
+  Energy Efficiency:        0.8817 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         0.991006
+  Max Abs Error:             53.500000
+  Relative RMSE:             0.134129
+
+================================================================================
+Benchmark: expected_m_per_group=256 (aligned=256), n=4096 (aligned=4096), k=7168 (aligned=7168), num_groups=32
+================================================================================
+
+  Kernel: bf16_baseline
+  Total M (across groups):  8192
+  Aligned N=4096, K=7168
+  ---- Performance ----
+  Latency:                  10245.98 us
+  Throughput:               46.95 TFLOPS
+  ---- Energy ----
+  Avg Power:                180.0 W
+  Energy per call:          1844.275 mJ
+  Energy Efficiency:        0.2608 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         1.000000
+  Max Abs Error:             0.000000
+  Relative RMSE:             0.000000
+
+  Kernel: fp8_grouped
+  Total M (across groups):  8192
+  Aligned N=4096, K=7168
+  ---- Performance ----
+  Latency:                  5093.36 us
+  Throughput:               94.44 TFLOPS
+  ---- Energy ----
+  Avg Power:                180.0 W
+  Energy per call:          916.770 mJ
+  Energy Efficiency:        0.5247 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         0.981239
+  Max Abs Error:             113.945312
+  Relative RMSE:             0.198478
+
+  Kernel: fp4_grouped
+  Total M (across groups):  8192
+  Aligned N=4096, K=7168
+  ---- Performance ----
+  Latency:                  1702.55 us
+  Throughput:               282.54 TFLOPS
+  ---- Energy ----
+  Avg Power:                174.6 W
+  Energy per call:          297.221 mJ
+  Energy Efficiency:        1.6184 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         0.990976
+  Max Abs Error:             65.250000
+  Relative RMSE:             0.134366
+
+================================================================================
+Benchmark: expected_m_per_group=512 (aligned=512), n=4096 (aligned=4096), k=7168 (aligned=7168), num_groups=16
+================================================================================
+
+  Kernel: bf16_baseline
+  Total M (across groups):  8192
+  Aligned N=4096, K=7168
+  ---- Performance ----
+  Latency:                  10168.46 us
+  Throughput:               47.31 TFLOPS
+  ---- Energy ----
+  Avg Power:                180.0 W
+  Energy per call:          1830.315 mJ
+  Energy Efficiency:        0.2628 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         1.000000
+  Max Abs Error:             0.000000
+  Relative RMSE:             0.000000
+
+  Kernel: fp8_grouped
+  Total M (across groups):  8192
+  Aligned N=4096, K=7168
+  ---- Performance ----
+  Latency:                  5046.38 us
+  Throughput:               95.32 TFLOPS
+  ---- Energy ----
+  Avg Power:                175.4 W
+  Energy per call:          884.918 mJ
+  Energy Efficiency:        0.5436 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         0.981228
+  Max Abs Error:             107.000000
+  Relative RMSE:             0.198556
+
+  Kernel: fp4_grouped
+  Total M (across groups):  8192
+  Aligned N=4096, K=7168
+  ---- Performance ----
+  Latency:                  1558.04 us
+  Throughput:               308.74 TFLOPS
+  ---- Energy ----
+  Avg Power:                171.4 W
+  Energy per call:          267.012 mJ
+  Energy Efficiency:        1.8016 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         0.990973
+  Max Abs Error:             62.000000
+  Relative RMSE:             0.134383
+
+================================================================================
+Benchmark: expected_m_per_group=4 (aligned=16), n=4096 (aligned=4096), k=7168 (aligned=7168), num_groups=32
+================================================================================
+
+  Kernel: bf16_baseline
+  Total M (across groups):  512
+  Aligned N=4096, K=7168
+  ---- Performance ----
+  Latency:                  4634.74 us
+  Throughput:               6.49 TFLOPS
+  ---- Energy ----
+  Avg Power:                141.4 W
+  Energy per call:          655.134 mJ
+  Energy Efficiency:        0.0459 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         1.000000
+  Max Abs Error:             0.000000
+  Relative RMSE:             0.000000
+
+  Kernel: fp8_grouped
+  Total M (across groups):  512
+  Aligned N=4096, K=7168
+  ---- Performance ----
+  Latency:                  2604.14 us
+  Throughput:               11.55 TFLOPS
+  ---- Energy ----
+  Avg Power:                171.5 W
+  Energy per call:          446.653 mJ
+  Energy Efficiency:        0.0673 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         0.981262
+  Max Abs Error:             101.000000
+  Relative RMSE:             0.198324
+
+  Kernel: fp4_grouped
+  Total M (across groups):  4096
+  Aligned N=4096, K=7168
+  ---- Performance ----
+  Latency:                  1466.76 us
+  Throughput:               163.98 TFLOPS
+  ---- Energy ----
+  Avg Power:                145.6 W
+  Energy per call:          213.489 mJ
+  Energy Efficiency:        1.1266 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         0.990991
+  Max Abs Error:             59.500000
+  Relative RMSE:             0.134230
+
+================================================================================
+Benchmark: expected_m_per_group=8 (aligned=16), n=4096 (aligned=4096), k=7168 (aligned=7168), num_groups=16
+================================================================================
+
+  Kernel: bf16_baseline
+  Total M (across groups):  256
+  Aligned N=4096, K=7168
+  ---- Performance ----
+  Latency:                  2328.55 us
+  Throughput:               6.46 TFLOPS
+  ---- Energy ----
+  Avg Power:                139.7 W
+  Energy per call:          325.192 mJ
+  Energy Efficiency:        0.0462 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         1.000000
+  Max Abs Error:             0.000000
+  Relative RMSE:             0.000000
+
+  Kernel: fp8_grouped
+  Total M (across groups):  256
+  Aligned N=4096, K=7168
+  ---- Performance ----
+  Latency:                  1355.57 us
+  Throughput:               11.09 TFLOPS
+  ---- Energy ----
+  Avg Power:                155.6 W
+  Energy per call:          210.914 mJ
+  Energy Efficiency:        0.0713 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         0.981451
+  Max Abs Error:             94.000000
+  Relative RMSE:             0.197245
+
+  Kernel: fp4_grouped
+  Total M (across groups):  2048
+  Aligned N=4096, K=7168
+  ---- Performance ----
+  Latency:                  737.52 us
+  Throughput:               163.06 TFLOPS
+  ---- Energy ----
+  Avg Power:                133.0 W
+  Energy per call:          98.083 mJ
+  Energy Efficiency:        1.2261 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         0.991005
+  Max Abs Error:             55.000000
+  Relative RMSE:             0.134141
+
+================================================================================
+Benchmark: expected_m_per_group=1024 (aligned=1024), n=768 (aligned=768), k=4096 (aligned=4096), num_groups=128
+================================================================================
+
+  Kernel: bf16_baseline
+  Total M (across groups):  131072
+  Aligned N=768, K=4096
+  ---- Performance ----
+  Latency:                  17410.09 us
+  Throughput:               47.37 TFLOPS
+  ---- Energy ----
+  Avg Power:                180.0 W
+  Energy per call:          3133.786 mJ
+  Energy Efficiency:        0.2631 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         1.000000
+  Max Abs Error:             0.000000
+  Relative RMSE:             0.000000
+
+  Kernel: fp8_grouped
+  Total M (across groups):  131072
+  Aligned N=768, K=4096
+  ---- Performance ----
+  Latency:                  8750.53 us
+  Throughput:               94.24 TFLOPS
+  ---- Energy ----
+  Avg Power:                174.9 W
+  Energy per call:          1530.780 mJ
+  Energy Efficiency:        0.5387 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         0.981275
+  Max Abs Error:             91.250000
+  Relative RMSE:             0.198289
+
+  Kernel: fp4_grouped
+  Total M (across groups):  131072
+  Aligned N=768, K=4096
+  ---- Performance ----
+  Latency:                  2752.76 us
+  Throughput:               299.57 TFLOPS
+  ---- Energy ----
+  Avg Power:                180.1 W
+  Energy per call:          495.688 mJ
+  Energy Efficiency:        1.6636 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         0.990973
+  Max Abs Error:             47.750000
+  Relative RMSE:             0.134400
+
+================================================================================
+Benchmark: expected_m_per_group=1024 (aligned=1024), n=4096 (aligned=4096), k=384 (aligned=384), num_groups=128
+================================================================================
+
+  Kernel: bf16_baseline
+  Total M (across groups):  131072
+  Aligned N=4096, K=384
+  ---- Performance ----
+  Latency:                  21787.54 us
+  Throughput:               18.92 TFLOPS
+  ---- Energy ----
+  Avg Power:                180.0 W
+  Energy per call:          3921.615 mJ
+  Energy Efficiency:        0.1051 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         1.000000
+  Max Abs Error:             0.000000
+  Relative RMSE:             0.000000
+
+  Kernel: fp8_grouped — FAILED: CUDA out of memory. Tried to allocate 2.00 GiB. GPU 0 has a total capacity of 15.47 GiB of which 1.25 GiB is free. Including non-PyTorch memory, this process has 13.62 GiB memory in use. Of the allocated memory 10.12 GiB is allocated by PyTorch, and 3.34 GiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+  Kernel: fp4_grouped — FAILED: CUDA out of memory. Tried to allocate 2.00 GiB. GPU 0 has a total capacity of 15.47 GiB of which 1.30 GiB is free. Including non-PyTorch memory, this process has 13.58 GiB memory in use. Of the allocated memory 9.83 GiB is allocated by PyTorch, and 3.59 GiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+================================================================================
+Benchmark: expected_m_per_group=16 (aligned=16), n=768 (aligned=768), k=4096 (aligned=4096), num_groups=128
+================================================================================
+
+  Kernel: bf16_baseline
+  Total M (across groups):  2048
+  Aligned N=768, K=4096
+  ---- Performance ----
+  Latency:                  2026.04 us
+  Throughput:               6.36 TFLOPS
+  ---- Energy ----
+  Avg Power:                134.4 W
+  Energy per call:          272.248 mJ
+  Energy Efficiency:        0.0473 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         1.000000
+  Max Abs Error:             0.000000
+  Relative RMSE:             0.000000
+
+  Kernel: fp8_grouped
+  Total M (across groups):  2048
+  Aligned N=768, K=4096
+  ---- Performance ----
+  Latency:                  1128.05 us
+  Throughput:               11.42 TFLOPS
+  ---- Energy ----
+  Avg Power:                154.3 W
+  Energy per call:          174.067 mJ
+  Energy Efficiency:        0.0740 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         0.981285
+  Max Abs Error:             80.062500
+  Relative RMSE:             0.198241
+
+  Kernel: fp4_grouped
+  Total M (across groups):  16384
+  Aligned N=768, K=4096
+  ---- Performance ----
+  Latency:                  735.25 us
+  Throughput:               140.20 TFLOPS
+  ---- Energy ----
+  Avg Power:                134.8 W
+  Energy per call:          99.118 mJ
+  Energy Efficiency:        1.0400 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         0.990963
+  Max Abs Error:             43.593750
+  Relative RMSE:             0.134454
+
+================================================================================
+Benchmark: expected_m_per_group=16 (aligned=16), n=4096 (aligned=4096), k=384 (aligned=384), num_groups=128
+================================================================================
+
+  Kernel: bf16_baseline
+  Total M (across groups):  2048
+  Aligned N=4096, K=384
+  ---- Performance ----
+  Latency:                  1038.38 us
+  Throughput:               6.20 TFLOPS
+  ---- Energy ----
+  Avg Power:                162.0 W
+  Energy per call:          168.208 mJ
+  Energy Efficiency:        0.0383 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         1.000000
+  Max Abs Error:             0.000000
+  Relative RMSE:             0.000000
+
+  Kernel: fp8_grouped
+  Total M (across groups):  2048
+  Aligned N=4096, K=384
+  ---- Performance ----
+  Latency:                  707.16 us
+  Throughput:               9.11 TFLOPS
+  ---- Energy ----
+  Avg Power:                119.5 W
+  Energy per call:          84.515 mJ
+  Energy Efficiency:        0.0762 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         0.982058
+  Max Abs Error:             50.000000
+  Relative RMSE:             0.193801
+
+  Kernel: fp4_grouped
+  Total M (across groups):  16384
+  Aligned N=4096, K=384
+  ---- Performance ----
+  Latency:                  721.95 us
+  Throughput:               71.39 TFLOPS
+  ---- Energy ----
+  Avg Power:                128.8 W
+  Energy per call:          92.973 mJ
+  Energy Efficiency:        0.5543 TFLOPS/W
+  ---- Accuracy (vs BF16 reference) ----
+  Cosine Similarity:         0.990974
+  Max Abs Error:             14.031250
+  Relative RMSE:             0.134375
+
+
+==============================================================================================================
+SUMMARY TABLE
+==============================================================================================================
+         Kernel |                     Shape |  Latency(us) |   TFLOPS |  Power(W) |   TFLOPS/W |     CosSim |  MaxAbsErr |    RelRMSE
+---------------------------------------------------------------------------------------------------------------------------
+  bf16_baseline |         m=128,n=512,g=256 |      6034.19 |    39.86 |     180.0 |     0.2215 |   1.000000 |     0.0000 |   0.000000
+    fp8_grouped |         m=128,n=512,g=256 |      3173.04 |    75.80 |     173.7 |     0.4364 |   0.981250 |   105.0000 |   0.198418
+    fp4_grouped |         m=128,n=512,g=256 |      1742.04 |   138.07 |     159.3 |     0.8665 |   0.990971 |    60.5000 |   0.134402
+  bf16_baseline |         m=256,n=512,g=256 |     10357.86 |    46.44 |     180.0 |     0.2580 |   1.000000 |     0.0000 |   0.000000
+    fp8_grouped |         m=256,n=512,g=256 |      5095.88 |    94.40 |     180.0 |     0.5245 |   0.981228 |   113.9688 |   0.198544
+    fp4_grouped |         m=256,n=512,g=256 |      2186.72 |   219.98 |     175.5 |     1.2538 |   0.990975 |    63.5000 |   0.134384
+  bf16_baseline |         m=256,n=256,g=256 |      5274.44 |    45.60 |     180.0 |     0.2533 |   1.000000 |     0.0000 |   0.000000
+    fp8_grouped |         m=256,n=256,g=256 |      2737.09 |    87.87 |     180.3 |     0.4874 |   0.981244 |   102.0000 |   0.198460
+    fp4_grouped |         m=256,n=256,g=256 |      1423.69 |   168.94 |     178.5 |     0.9463 |   0.990982 |    61.5000 |   0.134325
+  bf16_baseline |         m=512,n=256,g=256 |     10336.04 |    46.54 |     180.0 |     0.2586 |   1.000000 |     0.0000 |   0.000000
+    fp8_grouped |         m=512,n=256,g=256 |      5138.97 |    93.61 |     180.0 |     0.5200 |   0.981236 |   108.0000 |   0.198497
+    fp4_grouped |         m=512,n=256,g=256 |      2184.59 |   220.20 |     176.8 |     1.2452 |   0.990972 |    69.8594 |   0.134405
+  bf16_baseline |           m=1,n=512,g=256 |      4767.20 |     6.31 |     140.1 |     0.0450 |   1.000000 |     0.0000 |   0.000000
+    fp8_grouped |           m=1,n=512,g=256 |      2657.36 |    11.31 |     170.0 |     0.0666 |   0.981347 |   108.5000 |   0.197807
+    fp4_grouped |           m=1,n=512,g=256 |      1749.08 |   137.51 |     141.5 |     0.9718 |   0.990976 |    59.8750 |   0.134352
+  bf16_baseline |           m=2,n=256,g=256 |      2476.11 |     6.07 |     135.2 |     0.0449 |   1.000000 |     0.0000 |   0.000000
+    fp8_grouped |           m=2,n=256,g=256 |      1408.92 |    10.67 |     156.1 |     0.0684 |   0.981574 |    95.0000 |   0.196607
+    fp4_grouped |           m=2,n=256,g=256 |      1040.60 |   115.57 |     131.1 |     0.8817 |   0.991006 |    53.5000 |   0.134129
+  bf16_baseline |         m=256,n=4096,g=32 |     10245.98 |    46.95 |     180.0 |     0.2608 |   1.000000 |     0.0000 |   0.000000
+    fp8_grouped |         m=256,n=4096,g=32 |      5093.36 |    94.44 |     180.0 |     0.5247 |   0.981239 |   113.9453 |   0.198478
+    fp4_grouped |         m=256,n=4096,g=32 |      1702.55 |   282.54 |     174.6 |     1.6184 |   0.990976 |    65.2500 |   0.134366
+  bf16_baseline |         m=512,n=4096,g=16 |     10168.46 |    47.31 |     180.0 |     0.2628 |   1.000000 |     0.0000 |   0.000000
+    fp8_grouped |         m=512,n=4096,g=16 |      5046.38 |    95.32 |     175.4 |     0.5436 |   0.981228 |   107.0000 |   0.198556
+    fp4_grouped |         m=512,n=4096,g=16 |      1558.04 |   308.74 |     171.4 |     1.8016 |   0.990973 |    62.0000 |   0.134383
+  bf16_baseline |           m=4,n=4096,g=32 |      4634.74 |     6.49 |     141.4 |     0.0459 |   1.000000 |     0.0000 |   0.000000
+    fp8_grouped |           m=4,n=4096,g=32 |      2604.14 |    11.55 |     171.5 |     0.0673 |   0.981262 |   101.0000 |   0.198324
+    fp4_grouped |           m=4,n=4096,g=32 |      1466.76 |   163.98 |     145.6 |     1.1266 |   0.990991 |    59.5000 |   0.134230
+  bf16_baseline |           m=8,n=4096,g=16 |      2328.55 |     6.46 |     139.7 |     0.0462 |   1.000000 |     0.0000 |   0.000000
+    fp8_grouped |           m=8,n=4096,g=16 |      1355.57 |    11.09 |     155.6 |     0.0713 |   0.981451 |    94.0000 |   0.197245
+    fp4_grouped |           m=8,n=4096,g=16 |       737.52 |   163.06 |     133.0 |     1.2261 |   0.991005 |    55.0000 |   0.134141
+  bf16_baseline |        m=1024,n=768,g=128 |     17410.09 |    47.37 |     180.0 |     0.2631 |   1.000000 |     0.0000 |   0.000000
+    fp8_grouped |        m=1024,n=768,g=128 |      8750.53 |    94.24 |     174.9 |     0.5387 |   0.981275 |    91.2500 |   0.198289
+    fp4_grouped |        m=1024,n=768,g=128 |      2752.76 |   299.57 |     180.1 |     1.6636 |   0.990973 |    47.7500 |   0.134400
+  bf16_baseline |       m=1024,n=4096,g=128 |     21787.54 |    18.92 |     180.0 |     0.1051 |   1.000000 |     0.0000 |   0.000000
+  bf16_baseline |          m=16,n=768,g=128 |      2026.04 |     6.36 |     134.4 |     0.0473 |   1.000000 |     0.0000 |   0.000000
+    fp8_grouped |          m=16,n=768,g=128 |      1128.05 |    11.42 |     154.3 |     0.0740 |   0.981285 |    80.0625 |   0.198241
+    fp4_grouped |          m=16,n=768,g=128 |       735.25 |   140.20 |     134.8 |     1.0400 |   0.990963 |    43.5938 |   0.134454
+  bf16_baseline |         m=16,n=4096,g=128 |      1038.38 |     6.20 |     162.0 |     0.0383 |   1.000000 |     0.0000 |   0.000000
+    fp8_grouped |         m=16,n=4096,g=128 |       707.16 |     9.11 |     119.5 |     0.0762 |   0.982058 |    50.0000 |   0.193801
+    fp4_grouped |         m=16,n=4096,g=128 |       721.95 |    71.39 |     128.8 |     0.5543 |   0.990974 |    14.0312 |   0.134375
