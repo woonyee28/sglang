@@ -399,10 +399,10 @@ void launch_sm120_fp8_blockwise_scaled_group_mm(
 
     status = gemm_op.run(stream);
     TORCH_CHECK(status == cutlass::Status::kSuccess, "Failed to run GEMM");
-  }
+}
 
-  template <typename OutType>
-  void sm120_fp8_blockwise_group_mm_dispatch_shape(
+template <typename OutType>
+void sm120_fp8_blockwise_group_mm_dispatch_shape(
       torch::Tensor& output,
       torch::Tensor& a_ptrs,
       torch::Tensor& b_ptrs,
