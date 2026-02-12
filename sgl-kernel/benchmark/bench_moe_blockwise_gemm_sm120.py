@@ -429,9 +429,9 @@ def bench_fp4(data: BenchmarkData, num_warmup: int, num_run: int) -> Dict:
 
 
 benchmark_kernels = {
-    "bf16_baseline": bench_bf16,
-    "fp8_grouped": bench_fp8,
-    "fp4_grouped": bench_fp4,
+   "bf16_baseline": bench_bf16,
+   "fp8_grouped": bench_fp8,
+   "fp4_grouped": bench_fp4,
 }
 
 

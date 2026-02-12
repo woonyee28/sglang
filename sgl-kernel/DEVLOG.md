@@ -26,7 +26,7 @@ TFLOPS
   │                           
   │                         ★ Stage 4 (nvfp4)✅
   │                     ★ Stage 3 (transpoe trick for small M)
-  │                 ★ Stage 2 (tile shape tuning)
+  │                 ★ Stage 2 (tile shape tuning) ❌ many tile sizes not supported so cant tune much anyways
   │         ★ Stage 1 (blockwise FP8)✅
   │   ★ Stage 0 (FP16 baseline)✅
   │
